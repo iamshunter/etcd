@@ -30,7 +30,8 @@ int main (int argc, char **argv)
 
     if ( argc < 3 )
     {
-       printf("We arguments you only gave %d\n", argc);
+       printf("We need arguments you only gave %d\n", argc);
+       printf("EX: %s CMD KEY <val>\n", argv[0]);
        return -1;
     }
 
