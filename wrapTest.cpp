@@ -14,6 +14,12 @@
 #include <time.h>
 #include <unistd.h>
 
+
+#include "yaml.h"
+
+using namespace YAML;
+using namespace std;
+
 // ETCDCTL commands I need:
 //                         get
 //                         put
@@ -26,7 +32,7 @@ int main (int argc, char **argv)
 {
 
     bool putFlag=false;
-    char cmd[1024];
+    char cmd[4096];
 
     if ( argc < 3 )
     {
@@ -34,6 +40,13 @@ int main (int argc, char **argv)
        printf("EX: %s CMD KEY <val>\n", argv[0]);
        return -1;
     }
+
+    char bigBuf[4096]={0};
+    int  nn;
+    FILE *fptr = fopen("../yaml/config.yaml", "r");
+    nn=fread(bigBuf, 1, sizeof(bigBuf), fptr);
+    printf("Read %d bytes\n", nn);
+    fclose(fptr);
 
     for ( int ii=0; ii < argc; ii++)
     {
@@ -43,18 +56,13 @@ int main (int argc, char **argv)
     // Look for a "put" command.  That means we need an argument
     if ( memcmp(argv[CMD_IDX], "put", 3) == 0 )
     {
-       if ( argc != 4 )
-       {
-          printf("This is a put, we need a single value\n");
-          return -2;
-       }
        putFlag = true;
     }
 
     sprintf(cmd, "etcdctl --endpoints=\"http://127.0.0.1:2379\" %s %s", argv[CMD_IDX], argv[KEY_IDX]);
     if ( putFlag )
     {
-        sprintf(cmd, "%s \"%s\"", cmd, argv[VAL_IDX]);
+        sprintf(cmd, "%s \"%s\"", cmd, bigBuf);
     }
     printf("COMMAND:  %s\n", cmd);
 
@@ -63,10 +71,58 @@ int main (int argc, char **argv)
     if (fp != NULL)
     {   
         int kt = 10; 
-        while ( (fgets(in, 1024, fp) != NULL) && kt )
+        int nn=fread(in, 1, sizeof(in), fp);
+        printf("[%d bytes]\n", nn);
+
+        // Look for the key
+        if ( strncmp(in, argv[KEY_IDX], strlen(argv[KEY_IDX])) == 0 )
         {
-            kt--;
-            printf("%s", in);
+            printf("Found the key %s %d\n", argv[KEY_IDX], strlen(argv[KEY_IDX]) );
         }
-    }   
+        else
+        {
+            printf("NO key %s %s %d\n", argv[KEY_IDX], in, strlen(argv[KEY_IDX]) );
+            return -1;
+        }
+
+        // Look for a '\n'
+
+        printf("Decode the node ... ");
+
+        // The response from etcdctl is the key on the 1st line, followed
+        // by the value on the next line.
+        // Get a pointer the the string just after the key and its '\n'.
+        char *cPtr = &in[strlen(argv[KEY_IDX])+1];
+        YAML::Node node = YAML::Load(cPtr);
+        printf("done\n");
+        Node cmdl = node["CMDL"];
+        Node vort = node["Vortex"];
+        Node mt2  = node["T2"];
+        printf("Type %x\n", node.Type());
+
+        YAML::Node tempNode;
+        for ( int arg=1; arg<4; arg++ )
+        {
+           string str;
+           switch(arg)
+           {
+              case 1:
+                  tempNode = node["CMDL"];
+                  cout << "Node name CMDL size " << tempNode.size() << " " << endl;
+                  break;
+              case 2:
+                  tempNode = node["Vortex"];
+                  cout << "Node name Vortex size " << tempNode.size() << " " << endl;
+                  break;
+              case 3:
+                  tempNode = node["T2"];
+                  cout << "Node name T2 size " << tempNode.size() << " " << endl;
+                  break;
+           }
+
+           cout << "Freq -- : int " << tempNode["freq"].as<int>()    << endl;
+           cout << "band -- : str " << tempNode["band"].as<string>() << endl;
+        }
+
+    }
 }
